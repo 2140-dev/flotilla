@@ -92,4 +92,17 @@
     dates = "weekly";
     options = "--delete-older-than 30d";
   };
+
+  # Pull-based deploy. Each host polls flotilla's main branch hourly and
+  # applies its own configuration via `nixos-rebuild switch`. The flake
+  # lockfile (committed to main) pins all inputs, so what CI tested is
+  # exactly what activates here. Failed builds leave the previous config
+  # in place; nothing destructive happens on a broken push.
+  system.autoUpgrade = {
+    enable = true;
+    flake = "github:2140-dev/flotilla#${config.networking.hostName}";
+    flags = [ "-L" ];
+    dates = "hourly";
+    randomizedDelaySec = "10min";
+  };
 }
