@@ -83,10 +83,7 @@
     auto-optimise-store = true;
     substituters = [ "https://2140-dev.cachix.org" ];
     trusted-public-keys = [
-      # Replace with the actual public key from `https://2140-dev.cachix.org`.
-      # Cachix prints it on the cache page; until copied, builds still work
-      # but won't trust the cache as a source of pre-built artifacts.
-      "2140-dev.cachix.org-1:REPLACE_ME_AFTER_CACHE_KEY_LOOKUP"
+      "2140-dev.cachix.org-1:0brdoxVmXjL5udKuI+vXXwdEjPInGQKjCiyJLReZBt8="
     ];
   };
 
