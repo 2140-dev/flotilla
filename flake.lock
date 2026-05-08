@@ -214,11 +214,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1778199855,
-        "narHash": "sha256-gO1ixiNbrGYq0O7uQjyuEes1ncrM9x6w0+GN2Kg6s04=",
+        "lastModified": 1778201893,
+        "narHash": "sha256-QsFiptDZLKpQCUH4sV0Er4k8kHlMsDgezd+OgtfqfAY=",
         "owner": "2140-dev",
         "repo": "roost",
-        "rev": "4ce0a91eef1faab9b2928cb9108e2f305f30e850",
+        "rev": "904e5061b7d0760b859e66bdb7c687caeae01233",
         "type": "github"
       },
       "original": {

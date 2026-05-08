@@ -16,6 +16,14 @@
     tls.acmeEmail = "josie@2140.dev";
   };
 
+  # Operator pattern: add josie to the `bitcoin` group so `bitcoin-cli`
+  # works directly without `sudo -u bitcoin`. Host-specific because the
+  # operator name varies per box.
+  nix-bitcoin.operator = {
+    enable = true;
+    name = "josie";
+  };
+
   # Smaller scan batch than the preset's default. Shorter per-scan
   # latency at the cost of slightly higher framing overhead — a
   # comfortable middle ground for kingfisher's workload.
