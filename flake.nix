@@ -30,7 +30,6 @@
         name: extraModules:
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
-          specialArgs = { inherit self; };
           modules = [
             disko.nixosModules.disko
             agenix.nixosModules.default
@@ -44,6 +43,11 @@
       forAllSystems = nixpkgs.lib.genAttrs [
         "aarch64-darwin"
         "x86_64-linux"
+      ];
+
+      forAllLinux = nixpkgs.lib.genAttrs [
+        "x86_64-linux"
+        "aarch64-linux"
       ];
     in
     {
@@ -72,7 +76,7 @@
 
       # Build every host's toplevel as a flake check. Surfaces eval errors
       # and module-composition mistakes; runs natively wherever invoked.
-      checks = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (system: {
+      checks = forAllLinux (system: {
         finney = self.nixosConfigurations.finney.config.system.build.toplevel;
         kingfisher = self.nixosConfigurations.kingfisher.config.system.build.toplevel;
       });

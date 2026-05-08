@@ -69,10 +69,10 @@
   # SSH key auth is the only login path; no password to prompt for under sudo.
   security.sudo.wheelNeedsPassword = false;
 
-  environment.systemPackages = with pkgs; [
-    git
-    htop
-    tmux
+  environment.systemPackages = [
+    pkgs.git
+    pkgs.htop
+    pkgs.tmux
   ];
 
   nix.settings = {
