@@ -30,6 +30,10 @@
         name: extraModules:
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
+          # `self` is threaded through so common.nix can stamp the host's
+          # system.configurationRevision with the flake's git rev. Powers
+          # `nixos-version --configuration-revision` on the deployed box.
+          specialArgs = { inherit self; };
           modules = [
             disko.nixosModules.disko
             agenix.nixosModules.default

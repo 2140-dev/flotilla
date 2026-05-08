@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  self,
   ...
 }:
 
@@ -10,6 +11,11 @@
   # stateful services (NixOS releases sometimes change defaults that
   # affect existing on-disk data).
   system.stateVersion = "25.11";
+
+  # Stamp the host with the flotilla commit that produced it. Surfaced
+  # via `nixos-version --configuration-revision`. `null` when the flake
+  # is evaluated against a dirty git tree.
+  system.configurationRevision = self.rev or null;
 
   networking = {
     domain = "2140.dev";
