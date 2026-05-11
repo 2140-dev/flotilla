@@ -137,6 +137,16 @@
             mountpoint = "/var/lib/electrs";
             options.mountpoint = "legacy";
           };
+          # TEMPORARY: pre-warm dataset for the electrs → Fulcrum migration.
+          # Sits alongside safe/electrs while Fulcrum builds its initial
+          # index on a side port. After the cutover deploy swaps electrs
+          # out, safe/electrs gets removed from this file and destroyed
+          # on the host.
+          "safe/fulcrum" = {
+            type = "zfs_fs";
+            mountpoint = "/var/lib/fulcrum";
+            options.mountpoint = "legacy";
+          };
         };
       };
     };

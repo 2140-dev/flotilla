@@ -29,6 +29,17 @@
   # comfortable middle ground for kingfisher's workload.
   services.frigate.settings.scan.batchSize = 100000;
 
+  # TEMPORARY: pre-warm Fulcrum on a side port while electrs continues
+  # to serve Frigate on 50001. Once Fulcrum is fully indexed (check via
+  # `journalctl -u fulcrum`), the next deploy bumps roost to the
+  # version that swaps electrs out and the preset will move Fulcrum to
+  # 50001 — remove this block at that time.
+  services.fulcrum = {
+    enable = true;
+    port = 50011;
+    dataDir = "/var/lib/fulcrum";
+  };
+
   # systemd starts services with a stripped environment that does not
   # inherit NixOS's interactive-shell GPU library path. Without this,
   # frigate's JVM dlopen of libOpenCL.so.1 fails and DuckDB's ufsecp
