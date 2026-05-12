@@ -19,6 +19,9 @@
     tls.acmeEmail = "josie@2140.dev";
   };
 
+  # Add josie to the `bitcoin` group so `bitcoin-cli` works directly
+  # without `sudo -u bitcoin`. Operator name varies per box, so this
+  # stays per-host.
   nix-bitcoin.operator = {
     enable = true;
     name = "josie";
@@ -40,4 +43,18 @@
   # magnitude more capable than kingfisher's RTX 4000 SFF Ada and the
   # right value will only be visible after a real scan. The module
   # default (300_000) is the starting point.
+
+  # BOOTSTRAP: keep the data-bearing services from autostarting on the
+  # first boot so /var/lib/{bitcoind,fulcrum,frigate} can be populated
+  # via `zfs recv` from kingfisher without racing live writes. The
+  # users/groups still get created (those come from the modules' user
+  # definitions, independent of wantedBy), so the post-recv chown
+  # step has somebody to chown to.
+  #
+  # Remove this block once the import is complete and push; the next
+  # nixos-rebuild will land them in multi-user.target normally and
+  # they will start with the imported state.
+  systemd.services.bitcoind.wantedBy = lib.mkForce [ ];
+  systemd.services.fulcrum.wantedBy = lib.mkForce [ ];
+  systemd.services.frigate.wantedBy = lib.mkForce [ ];
 }
