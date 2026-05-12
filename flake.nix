@@ -58,6 +58,7 @@
       nixosConfigurations = {
         finney = mkHost "finney" [ ];
         kingfisher = mkHost "kingfisher" [ roost.nixosModules.default ];
+        albatross = mkHost "albatross" [ roost.nixosModules.default ];
       };
 
       formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
@@ -83,6 +84,7 @@
       checks = forAllLinux (system: {
         finney = self.nixosConfigurations.finney.config.system.build.toplevel;
         kingfisher = self.nixosConfigurations.kingfisher.config.system.build.toplevel;
+        albatross = self.nixosConfigurations.albatross.config.system.build.toplevel;
       });
     };
 }
