@@ -6,16 +6,14 @@
 }:
 
 {
-  # Same public hostname as kingfisher. Once both boxes are live this
-  # is the load-balancing seam — either DNS round-robin on the A/AAAA
-  # records or HAProxy fronting both backends. While only kingfisher
-  # holds the records, albatross's ACME issuance will fail (HTTP-01
-  # needs DNS pointed at the host requesting the cert); plan for a
-  # brief DNS swap during first install, or move to DNS-01 challenge
-  # before adding the second backend.
+  # Own hostname for now (rather than sharing kingfisher's
+  # frigate.2140.dev). Each backend self-issues its own cert via
+  # HTTP-01 — no DNS-01 wiring and no shared-cert coordination.
+  # Future load-balancing work will move both back behind a single
+  # hostname, fronted by a third host doing TCP/SNI passthrough.
   services.public-frigate = {
     enable = true;
-    host = "frigate.2140.dev";
+    host = "albatross.2140.dev";
     tls.acmeEmail = "josie@2140.dev";
   };
 
