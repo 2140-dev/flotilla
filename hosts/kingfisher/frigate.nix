@@ -7,7 +7,7 @@
 
 {
   # roost.nixosModules.default (the batteries-included path) brings in
-  # nix-bitcoin, configures bitcoind+electrs+frigate, and terminates
+  # nix-bitcoin, configures bitcoind+fulcrum+frigate, and terminates
   # Electrum-over-TLS in nginx with ACME on the configured host. All
   # this host needs is identity (DNS) and an ACME contact email.
   services.public-frigate = {
@@ -28,17 +28,6 @@
   # latency at the cost of slightly higher framing overhead — a
   # comfortable middle ground for kingfisher's workload.
   services.frigate.settings.scan.batchSize = 100000;
-
-  # TEMPORARY: pre-warm Fulcrum on a side port while electrs continues
-  # to serve Frigate on 50001. Once Fulcrum is fully indexed (check via
-  # `journalctl -u fulcrum`), the next deploy bumps roost to the
-  # version that swaps electrs out and the preset will move Fulcrum to
-  # 50001 — remove this block at that time.
-  services.fulcrum = {
-    enable = true;
-    port = 50011;
-    dataDir = "/var/lib/fulcrum";
-  };
 
   # systemd starts services with a stripped environment that does not
   # inherit NixOS's interactive-shell GPU library path. Without this,
