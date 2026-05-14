@@ -49,10 +49,18 @@
   # definitions, independent of wantedBy), so the post-recv chown
   # step has somebody to chown to.
   #
+  # Also disable autoUpgrade for the duration: the seeding workflow
+  # destroys the placeholder datasets before recv, which would leave
+  # mount units in a failed state until recv lands. An hourly rebuild
+  # firing during that window risks compounding the breakage and
+  # killed albatross on the first attempt.
+  #
   # Remove this block once the import is complete and push; the next
-  # nixos-rebuild will land them in multi-user.target normally and
-  # they will start with the imported state.
+  # nixos-rebuild will land services in multi-user.target normally,
+  # they will start with the imported state, and autoUpgrade resumes
+  # polling.
   systemd.services.bitcoind.wantedBy = lib.mkForce [ ];
   systemd.services.fulcrum.wantedBy = lib.mkForce [ ];
   systemd.services.frigate.wantedBy = lib.mkForce [ ];
+  system.autoUpgrade.enable = lib.mkForce false;
 }
