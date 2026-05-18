@@ -57,8 +57,14 @@
     {
       nixosConfigurations = {
         finney = mkHost "finney" [ ];
-        kingfisher = mkHost "kingfisher" [ roost.nixosModules.default ];
-        albatross = mkHost "albatross" [ roost.nixosModules.default ];
+        kingfisher = mkHost "kingfisher" [
+          roost.nixosModules.default
+          roost.nixosModules.wireguard-mesh
+        ];
+        albatross = mkHost "albatross" [
+          roost.nixosModules.frigate-edge
+          roost.nixosModules.wireguard-mesh
+        ];
       };
 
       formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
