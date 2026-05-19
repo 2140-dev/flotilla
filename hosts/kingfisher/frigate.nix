@@ -49,6 +49,18 @@
   # comfortable middle ground for kingfisher's workload.
   services.frigate.settings.scan.batchSize = 100000;
 
+  # Fulcrum defaults `max_clients_per_ip = 12`; with concurrent benchmark
+  # clients (each opening a fresh frigate session that itself opens an
+  # upstream fulcrum connection over loopback) we exceed the cap and
+  # refused connections cascade into VersionNotNegotiated / Internal
+  # error responses to the benchmark. Raise the per-IP cap; the public
+  # TLS endpoint is the only externally reachable surface — fulcrum is
+  # only reachable from this box's own frigate (127.0.0.1) and
+  # albatross over wg0, so a higher cap is harmless.
+  services.fulcrum.extraConfig = ''
+    max_clients_per_ip = 50
+  '';
+
   # systemd starts services with a stripped environment that does not
   # inherit NixOS's interactive-shell GPU library path. Without this,
   # frigate's JVM dlopen of libOpenCL.so.1 fails and DuckDB's ufsecp

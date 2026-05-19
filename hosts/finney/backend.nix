@@ -34,4 +34,15 @@
     enable = true;
     name = "josie";
   };
+
+  # Fulcrum defaults `max_clients_per_ip = 12`; with concurrent benchmark
+  # clients (each opening a fresh frigate session that itself opens an
+  # upstream fulcrum connection) we exceed the cap and refused
+  # connections cascade into VersionNotNegotiated / Internal error
+  # responses. Raise the per-IP cap; the public TLS endpoint stays
+  # exposed only on albatross, fulcrum on this box is reachable only
+  # over wg0 from albatross's mesh IP, so a higher cap is harmless.
+  services.fulcrum.extraConfig = ''
+    max_clients_per_ip = 50
+  '';
 }
