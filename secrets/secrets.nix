@@ -11,15 +11,32 @@
 #        nix run github:ryantm/agenix -- --identity edit-key
 #      and paste its public form into `josie` below.
 #   4. Encrypt secrets:
-#        cd secrets && nix run github:ryantm/agenix -- -e bitcoind-rpcauth.age
+#        cd secrets && nix run github:ryantm/agenix -- -e <name>.age
 #   5. Reference them from a host module via `age.secrets.<name>.file = ./secrets/<name>.age;`.
 let
-  josie = "age1...REPLACE_ME_WITH_YOUR_AGE_PUBKEY";
+  josie = "age1jf8np2gw2wkd0k46x4z3plr47jz0kqvjker63jh2xqqjqpszcedsg2e6ug";
   finney = "ssh-ed25519 AAAA...REPLACE_ME_WITH_HOST_KEY_AFTER_FIRST_BOOT";
-  kingfisher = "ssh-ed25519 AAAA...REPLACE_ME_WITH_HOST_KEY_AFTER_FIRST_BOOT";
+  kingfisher = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB2j+A4rvxr+5JIP4XrRqAI3uHUOriAPpiDSc8F+izAG root@kingfisher";
+  albatross = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAPnn6DYBcz7nkpnOniTfwLtncQ8JlzYSjkFLd5uL5o3 root@albatross";
 in
 {
-  # Examples — uncomment and create the .age files when wiring services:
-  # "bitcoind-rpcauth.age".publicKeys = [ josie kingfisher ];
-  # "wireguard-finney.age".publicKeys = [ josie finney ];
+  # `user:password` for the bitcoind RPC user that frigate-edge on
+  # albatross uses to authenticate to kingfisher's bitcoind. The
+  # corresponding rpcauth HMAC lives in
+  # hosts/kingfisher/frigate.nix (services.public-frigate.exposeBackends.rpcAuth.passwordHMAC).
+  "bitcoind-rpc-creds.age".publicKeys = [
+    josie
+    albatross
+  ];
+
+  # Per-host WireGuard private keys. Each one only needs to decrypt on
+  # its own host plus josie (so josie can re-encrypt if needed).
+  "wireguard-kingfisher.age".publicKeys = [
+    josie
+    kingfisher
+  ];
+  "wireguard-albatross.age".publicKeys = [
+    josie
+    albatross
+  ];
 }

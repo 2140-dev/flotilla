@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        host: [finney, kingfisher]
+        host: [finney, kingfisher, albatross]
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v30

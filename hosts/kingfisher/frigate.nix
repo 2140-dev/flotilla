@@ -14,6 +14,26 @@
     enable = true;
     host = "frigate.2140.dev";
     tls.acmeEmail = "josie@2140.dev";
+
+    # Expose bitcoind RPC + ZMQ + fulcrum on the WireGuard mesh interface
+    # so albatross can run frigate-edge against this stack instead of
+    # carrying its own ~950 GB chain copy. Interface-scoped firewall
+    # keeps these ports unreachable from the public internet.
+    #
+    # The HMAC below is committed (one-way derived from the password);
+    # the plaintext lives in secrets/bitcoind-rpc-creds.age on albatross.
+    # See modules/wireguard-mesh.nix for the mesh topology and
+    # hosts/_mesh.nix for the peer registry.
+    exposeBackends = {
+      enable = true;
+      bindAddress = "10.42.0.1";
+      interface = "wg0";
+      allowedPeers = [ "10.42.0.2/32" ];
+      rpcAuth = {
+        user = "frigate-edge";
+        passwordHMAC = "bec2842f5d4d3451316cc22f5db6560c$804448c1fd845e4160f5e6cc182b8250d5324679b9372e817fdb37c42ea71cc9";
+      };
+    };
   };
 
   # Operator pattern: add josie to the `bitcoin` group so `bitcoin-cli`

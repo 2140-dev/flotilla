@@ -11,6 +11,7 @@
     ./hardware-configuration.nix
     ./gpu.nix
     ./frigate.nix
+    ./wireguard.nix
   ];
 
   networking.hostName = "kingfisher";
