@@ -31,7 +31,7 @@
       allowedPeers = [ "10.42.0.2/32" ];
       rpcAuth = {
         user = "frigate-edge";
-        passwordHMAC = "PLACEHOLDER_RPCAUTH_HMAC";
+        passwordHMAC = "bec2842f5d4d3451316cc22f5db6560c$804448c1fd845e4160f5e6cc182b8250d5324679b9372e817fdb37c42ea71cc9";
       };
     };
   };
