@@ -26,7 +26,7 @@
       meshIp = "10.42.0.2";
     };
     finney = {
-      publicKey = "xAxOhkkotF76RH2xBDB/vqnbvOv1+bWVxarx4n2PyhI=";
+      publicKey = "L/7QR3ANOD+QmExD/m63tBL8sDpK2h2zQWrja4cozS4=";
       endpoint = "65.21.237.160:51820";
       meshIp = "10.42.0.3";
     };
