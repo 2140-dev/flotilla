@@ -14,7 +14,12 @@
   # mempool-init phase take ~47 minutes.
   services.frigate-edge = {
     enable = true;
-    host = "albatross.2140.dev";
+    # Public hostname promoted from albatross.2140.dev to frigate.2140.dev
+    # after DNS for frigate.2140.dev was moved here. ACME re-issues a
+    # cert for the new SAN on the next activation; the postRun on the
+    # _internal/frigate-tls-acme helper converts the lego output to
+    # PKCS#8 so frigate's TLS loader accepts it.
+    host = "frigate.2140.dev";
     tls.acmeEmail = "josie@2140.dev";
 
     backend = {

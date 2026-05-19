@@ -49,17 +49,24 @@
   # comfortable middle ground for kingfisher's workload.
   services.frigate.settings.scan.batchSize = 100000;
 
-  # Fulcrum defaults `max_clients_per_ip = 12`; with concurrent benchmark
-  # clients (each opening a fresh frigate session that itself opens an
-  # upstream fulcrum connection over loopback) we exceed the cap and
-  # refused connections cascade into VersionNotNegotiated / Internal
-  # error responses to the benchmark. Raise the per-IP cap; the public
-  # TLS endpoint is the only externally reachable surface — fulcrum is
-  # only reachable from this box's own frigate (127.0.0.1) and
-  # albatross over wg0, so a higher cap is harmless.
+  # Fulcrum defaults `max_clients_per_ip = 12`; concurrent clients
+  # (each opening a fresh frigate session that itself opens an upstream
+  # fulcrum connection) cascade into refused-connection errors past the
+  # cap. Raise it; fulcrum is only reachable from this box's own
+  # frigate (127.0.0.1) and albatross over wg0, so a higher cap is
+  # harmless.
   services.fulcrum.extraConfig = ''
     max_clients_per_ip = 50
   '';
+
+  # frigate.2140.dev DNS now points at albatross — this box is a hot
+  # standby keeping bitcoind/fulcrum/frigate state warm in case we
+  # need to flip back. Bind the SSL listener to loopback so nothing
+  # external can reach it; the existing ACME cert continues to work
+  # until its next renewal (which will fail when lego can't HTTP-01
+  # validate since DNS no longer routes here — address before then by
+  # promoting back, renaming, or dropping the cert).
+  services.frigate.ssl = lib.mkForce "ssl://127.0.0.1:50002";
 
   # systemd starts services with a stripped environment that does not
   # inherit NixOS's interactive-shell GPU library path. Without this,
