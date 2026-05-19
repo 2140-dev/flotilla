@@ -45,4 +45,11 @@
   # frigate's JVM dlopen of libOpenCL.so.1 fails and DuckDB's ufsecp
   # extension silently falls back to CPU.
   systemd.services.frigate.environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
+
+  # Use frigate's native default batch (300k) rather than the roost
+  # preset's more conservative 200k. albatross's GPU has the compute
+  # width + memory for the bigger kernels; one round of measurement
+  # (200k @ 10c vs 500k @ 20c) didn't conclusively recommend a value,
+  # so default to what upstream picked until we run a controlled sweep.
+  services.frigate.settings.scan.batchSize = 300000;
 }
