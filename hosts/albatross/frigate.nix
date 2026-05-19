@@ -7,10 +7,11 @@
 
 {
   # Edge-mode Frigate: TLS termination + ACME live here, the bitcoind /
-  # fulcrum / ZMQ stack runs on kingfisher and is consumed over the
-  # private WireGuard mesh (see ./wireguard.nix and ../_mesh.nix).
-  # This sidesteps the storage-capacity problem on albatross's
-  # ~866 GB pool — frigate's own DuckDB index is the only local data.
+  # fulcrum / ZMQ stack runs on finney (HEL1-DC9, sub-1 ms from this
+  # box in HEL1-DC6) and is consumed over the private WireGuard mesh.
+  # See ./wireguard.nix and ../_mesh.nix for the topology; backends
+  # were previously on kingfisher (NBG, 26 ms) which made frigate's
+  # mempool-init phase take ~47 minutes.
   services.frigate-edge = {
     enable = true;
     host = "albatross.2140.dev";
@@ -18,11 +19,11 @@
 
     backend = {
       bitcoind = {
-        rpcUrl = "http://10.42.0.1:8332";
+        rpcUrl = "http://10.42.0.3:8332";
         authCredentialFile = config.age.secrets.bitcoind-rpc-creds.path;
-        zmqSequenceEndpoint = "tcp://10.42.0.1:28336";
+        zmqSequenceEndpoint = "tcp://10.42.0.3:28336";
       };
-      electrumUrl = "tcp://10.42.0.1:60001";
+      electrumUrl = "tcp://10.42.0.3:60001";
     };
   };
 

@@ -9,6 +9,8 @@
   imports = [
     ./disko.nix
     ./hardware-configuration.nix
+    ./backend.nix
+    ./wireguard.nix
   ];
 
   networking.hostName = "finney";

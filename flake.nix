@@ -56,7 +56,10 @@
     in
     {
       nixosConfigurations = {
-        finney = mkHost "finney" [ ];
+        finney = mkHost "finney" [
+          roost.nixosModules.bitcoind-backend-host
+          roost.nixosModules.wireguard-mesh
+        ];
         kingfisher = mkHost "kingfisher" [
           roost.nixosModules.default
           roost.nixosModules.wireguard-mesh

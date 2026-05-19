@@ -53,10 +53,26 @@
         };
       };
 
-      # nvme2 (1.9TB Samsung) hosted the `tank` pool for bitcoind on the
-      # original layout. After consolidation onto kingfisher it is unused
-      # and intentionally not declared here — a fresh re-install would
-      # leave the disk untouched, which is what we want.
+      # nvme2 (1.9TB Samsung) hosts the `tank` pool — bitcoind's chain
+      # data and txindex live on tank/bitcoind, fulcrum's index on
+      # tank/fulcrum. Single-device pool: the bitcoind chain is
+      # reconstructable from network, so we accept the disk as a single
+      # point of failure rather than burning a second 1.9 TB NVMe on a
+      # mirror.
+      nvme2 = {
+        type = "disk";
+        device = "/dev/nvme2n1";
+        content = {
+          type = "gpt";
+          partitions.zfs = {
+            size = "100%";
+            content = {
+              type = "zfs";
+              pool = "tank";
+            };
+          };
+        };
+      };
     };
 
     zpool = {
@@ -113,6 +129,40 @@
           "safe/home" = {
             type = "zfs_fs";
             mountpoint = "/home";
+            options.mountpoint = "legacy";
+          };
+        };
+      };
+
+      # Bitcoin backend storage. tank/bitcoind already exists with ~766 GB
+      # of mainnet chain + txindex from the prior single-tenant layout —
+      # disko on `nixos-rebuild switch` only generates fileSystems mounts
+      # for declared datasets; it does not recreate or wipe an existing
+      # one. The dataset's runtime properties (mountpoint=legacy,
+      # compression=zstd) already match what we declare here.
+      tank = {
+        type = "zpool";
+        rootFsOptions = {
+          compression = "zstd";
+          atime = "off";
+          xattr = "sa";
+          acltype = "posixacl";
+          mountpoint = "none";
+          canmount = "off";
+        };
+        options = {
+          ashift = "12";
+          autotrim = "on";
+        };
+        datasets = {
+          "bitcoind" = {
+            type = "zfs_fs";
+            mountpoint = "/var/lib/bitcoind";
+            options.mountpoint = "legacy";
+          };
+          "fulcrum" = {
+            type = "zfs_fs";
+            mountpoint = "/var/lib/fulcrum";
             options.mountpoint = "legacy";
           };
         };

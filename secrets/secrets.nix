@@ -15,7 +15,7 @@
 #   5. Reference them from a host module via `age.secrets.<name>.file = ./secrets/<name>.age;`.
 let
   josie = "age1jf8np2gw2wkd0k46x4z3plr47jz0kqvjker63jh2xqqjqpszcedsg2e6ug";
-  finney = "ssh-ed25519 AAAA...REPLACE_ME_WITH_HOST_KEY_AFTER_FIRST_BOOT";
+  finney = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJrlkSFtMHRfnVZwdQUZmID0RSmUTGlLQ+eP8PpGir06 root@finney";
   kingfisher = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB2j+A4rvxr+5JIP4XrRqAI3uHUOriAPpiDSc8F+izAG root@kingfisher";
   albatross = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAPnn6DYBcz7nkpnOniTfwLtncQ8JlzYSjkFLd5uL5o3 root@albatross";
 in
@@ -38,5 +38,9 @@ in
   "wireguard-albatross.age".publicKeys = [
     josie
     albatross
+  ];
+  "wireguard-finney.age".publicKeys = [
+    josie
+    finney
   ];
 }
