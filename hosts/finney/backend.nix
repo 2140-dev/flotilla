@@ -35,14 +35,14 @@
     name = "josie";
   };
 
-  # Fulcrum defaults `max_clients_per_ip = 12`; with concurrent benchmark
-  # clients (each opening a fresh frigate session that itself opens an
-  # upstream fulcrum connection) we exceed the cap and refused
-  # connections cascade into VersionNotNegotiated / Internal error
-  # responses. Raise the per-IP cap; the public TLS endpoint stays
-  # exposed only on albatross, fulcrum on this box is reachable only
-  # over wg0 from albatross's mesh IP, so a higher cap is harmless.
+  # Per upstream frigate's README "Backend Limits" guidance: all frigate
+  # client connections to the backend appear from a single source IP, so
+  # the default `max_clients_per_ip = 12` will refuse new frigates well
+  # below fulcrum's overall capacity. Rather than raise the global cap
+  # (which removes per-IP protection from all clients), exempt the edge
+  # consumer's wg IP. Fulcrum already exempts loopback by default, so
+  # this is the only exemption finney needs for the current topology.
   services.fulcrum.extraConfig = ''
-    max_clients_per_ip = 50
+    subnets_to_exclude_from_per_ip_limits = 10.42.0.2/32
   '';
 }
