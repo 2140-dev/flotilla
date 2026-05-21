@@ -33,7 +33,10 @@
           # `self` is threaded through so common.nix can stamp the host's
           # system.configurationRevision with the flake's git rev. Powers
           # `nixos-version --configuration-revision` on the deployed box.
-          specialArgs = { inherit self; };
+          # `roost` is threaded so host modules can reference its source
+          # tree (e.g. to overrideAttrs a roost-shipped package without
+          # forking roost). See hosts/albatross/frigate.nix.
+          specialArgs = { inherit self roost; };
           modules = [
             disko.nixosModules.disko
             agenix.nixosModules.default
