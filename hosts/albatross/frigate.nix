@@ -2,7 +2,6 @@
   config,
   lib,
   pkgs,
-  roost,
   ...
 }:
 
@@ -58,37 +57,4 @@
   # (200k @ 10c vs 500k @ 20c) didn't conclusively recommend a value,
   # so default to what upstream picked until we run a controlled sweep.
   services.frigate.settings.scan.batchSize = 300000;
-
-  # Track sparrowwallet/frigate master ahead of the v1.5.1 tag that
-  # roost pins. Done at the pkgs-set level (not via
-  # `services.frigate.package`) so any other consumer of
-  # `pkgs.frigate-sparrowwallet` on this host — CLI on PATH, helper
-  # scripts, future tests — sees the same version as the daemon. The
-  # service module's default reads `pkgs.frigate-sparrowwallet or
-  # (callPackage …)`, so this overlay flows through automatically.
-  #
-  # Per-host divergence only: this overlay lives inside
-  # hosts/albatross/frigate.nix and is therefore only contributed to
-  # albatross's nixpkgs config — kingfisher continues to ship roost's
-  # pinned release.
-  #
-  # Retire this block when roost bumps to a frigate tag containing
-  # the commits we want here. Re-prefetch with
-  # `nix run nixpkgs#nix-prefetch-github -- sparrowwallet frigate --rev <sha>`
-  # and update `rev` + `hash` together when bumping master HEAD.
-  nixpkgs.overlays = [
-    (final: _prev: {
-      frigate-sparrowwallet =
-        (final.callPackage "${roost}/pkgs/frigate/package.nix" { }).overrideAttrs
-          (old: {
-            version = "1.5.1-master-a9b4724";
-            src = final.fetchFromGitHub {
-              owner = "sparrowwallet";
-              repo = "frigate";
-              rev = "a9b47244aa3ac6b23501e55bee8b3cac408b495f";
-              hash = "sha256-6DUm9RUTAE07oQtuMdSSfuxfiOtmhRuhGl+mnmWhnxE=";
-            };
-          });
-    })
-  ];
 }
