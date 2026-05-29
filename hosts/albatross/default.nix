@@ -11,6 +11,7 @@
     ./hardware-configuration.nix
     ./gpu.nix
     ./frigate.nix
+    ./frigate-watchdog.nix
     ./wireguard.nix
   ];
 
