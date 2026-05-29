@@ -14,7 +14,11 @@
 # ships a fix.
 #
 # Two timer-driven oneshots:
-#   - probe: every 60s, runs liveness + CLOSE-WAIT canary, writes status.json
+#   - probe: every 60s, runs liveness (server.version + blockchain.headers.subscribe)
+#            + CLOSE-WAIT canary, writes status.json. The second RPC call
+#            touches frigate's IndexQuerier, so a DB-lock cascade that leaves
+#            request dispatch alive but the index path stuck shows up as a
+#            timeout instead of staying green.
 #   - act:   every 60s offset 30s, reads status.json, SIGKILLs frigate
 #            if two consecutive bad probes (subject to cooldown + rate limit)
 #
@@ -34,6 +38,7 @@ let
   maxRestartsInWindow = 3;
   windowSecs = 6 * 60 * 60;
   maxStatusAgeSecs = 180;
+  minActiveBeforeRestartSecs = 3 * 60;
   fulcrumPeer = "10.42.0.3:60001";
 
   ssBin = "${pkgs.iproute2}/bin/ss";
@@ -43,7 +48,9 @@ let
   # E501 (line length) is suppressed because nix-interpolated store paths
   # like /nix/store/HASH-systemd-260.1/bin/systemctl exceed 79 chars on a
   # single line and breaking them only hurts readability.
-  pythonWriterArgs = { flakeIgnore = [ "E501" ]; };
+  pythonWriterArgs = {
+    flakeIgnore = [ "E501" ];
+  };
 
   probe = pkgs.writers.writePython3Bin "frigate-watchdog-probe" pythonWriterArgs ''
     """Frigate health probe: liveness + CLOSE-WAIT canary + indexer freshness.
@@ -71,38 +78,67 @@ let
 
 
     def probe_ping():
-        """Connect to frigate's plaintext Electrum port and round-trip a
-        request. Uses server.version because frigate enforces version
-        negotiation as the first message on every connection — server.ping
-        on a fresh connection returns an error. server.version exercises
-        the same request-dispatch path and is a no-op as far as DB / backend
-        are concerned.
+        """Connect to frigate's plaintext Electrum port and round-trip two
+        requests on a single connection:
+
+          1. server.version — frigate enforces version negotiation as the
+             first message; this exercises request dispatch but is a no-op
+             as far as DB / backend are concerned.
+          2. blockchain.headers.subscribe — reads the current best block
+             from frigate's local index, touching the IndexQuerier path
+             that holds DuckDB's read lock. A pure-DB-lock cascade where
+             dispatch stays alive but index reads queue behind a writer
+             surfaces here as a recv timeout. We accept any timely response
+             (including an RPC error body) as proof the index path is alive;
+             the wedge symptom is a stuck recv, not an error payload.
         """
-        req = (
+        version_req = (
             b'{"jsonrpc":"2.0","method":"server.version",'
             b'"id":1,"params":["frigate-watchdog","1.4"]}\n'
         )
+        headers_req = (
+            b'{"jsonrpc":"2.0","method":"blockchain.headers.subscribe",'
+            b'"id":2,"params":[]}\n'
+        )
+
+        def recv_line(s, buf):
+            while b"\n" not in buf:
+                chunk = s.recv(4096)
+                if not chunk:
+                    return None, buf
+                buf += chunk
+            line, _, rest = buf.partition(b"\n")
+            return line, rest
+
         start = time.monotonic()
         try:
             with socket.create_connection(
                 ("127.0.0.1", 50001), timeout=PING_TIMEOUT_SECS
             ) as s:
                 s.settimeout(PING_TIMEOUT_SECS)
-                s.sendall(req)
-                buf = b""
-                while b"\n" not in buf:
-                    chunk = s.recv(4096)
-                    if not chunk:
-                        return False, (time.monotonic() - start) * 1000, "eof"
-                    buf += chunk
-                elapsed_ms = (time.monotonic() - start) * 1000
-                resp = json.loads(buf.split(b"\n", 1)[0])
+
+                s.sendall(version_req)
+                line, buf = recv_line(s, b"")
+                if line is None:
+                    return False, (time.monotonic() - start) * 1000, "version:eof"
+                resp = json.loads(line)
                 if resp.get("error") is not None:
-                    return False, elapsed_ms, f"rpc_error:{resp['error']}"
-                # Sanity-check shape: server.version returns [name, version]
+                    elapsed_ms = (time.monotonic() - start) * 1000
+                    return False, elapsed_ms, f"version_rpc_error:{resp['error']}"
                 result = resp.get("result")
                 if not (isinstance(result, list) and len(result) == 2):
-                    return False, elapsed_ms, f"bad_shape:{result!r}"
+                    elapsed_ms = (time.monotonic() - start) * 1000
+                    return False, elapsed_ms, f"version_bad_shape:{result!r}"
+
+                s.sendall(headers_req)
+                line, _ = recv_line(s, buf)
+                elapsed_ms = (time.monotonic() - start) * 1000
+                if line is None:
+                    return False, elapsed_ms, "headers:eof"
+                # Any well-formed JSON response — including an RPC error —
+                # proves the index path is responsive. Only a stuck recv
+                # (caught as socket.timeout above) or malformed JSON fails.
+                json.loads(line)
                 return True, elapsed_ms, None
         except (socket.timeout, TimeoutError):
             return False, PING_TIMEOUT_SECS * 1000, "timeout"
@@ -203,19 +239,28 @@ let
     MAX_RESTARTS_IN_WINDOW = ${toString maxRestartsInWindow}
     WINDOW_SECS = ${toString windowSecs}
     MAX_STATUS_AGE_SECS = ${toString maxStatusAgeSecs}
+    MIN_ACTIVE_BEFORE_RESTART_SECS = ${toString minActiveBeforeRestartSecs}
 
     SYSTEMCTL_BIN = "${systemctlBin}"
 
-    EMPTY_STATE = {"consecutive_bad": 0, "last_restart_ts": 0, "restart_history": []}
+    EMPTY_STATE = {
+        "consecutive_bad": 0,
+        "last_restart_ts": 0,
+        "restart_history": [],
+        "last_status_ts": 0,
+    }
 
 
     def load_state():
         if not STATE_FILE.exists():
             return dict(EMPTY_STATE)
         try:
-            return json.loads(STATE_FILE.read_text())
+            state = json.loads(STATE_FILE.read_text())
         except (json.JSONDecodeError, OSError):
             return dict(EMPTY_STATE)
+        merged = dict(EMPTY_STATE)
+        merged.update(state)
+        return merged
 
 
     def save_state(s):
@@ -224,10 +269,50 @@ let
         tmp.replace(STATE_FILE)
 
 
+    def get_frigate_service_state(now):
+        try:
+            proc = subprocess.run(
+                [SYSTEMCTL_BIN, "show", "frigate.service",
+                 "--property=ActiveState",
+                 "--property=SubState",
+                 "--property=ActiveEnterTimestampMonotonic"],
+                capture_output=True, text=True, timeout=10,
+            )
+        except (subprocess.TimeoutExpired, OSError) as e:
+            return None, f"systemctl_show_failed:{type(e).__name__}:{e}"
+        if proc.returncode != 0:
+            return None, f"systemctl_show_failed:rc={proc.returncode}:{proc.stderr.strip()}"
+
+        fields = {}
+        for line in proc.stdout.splitlines():
+            key, sep, value = line.partition("=")
+            if sep:
+                fields[key] = value
+
+        active_state = fields.get("ActiveState", "unknown")
+        sub_state = fields.get("SubState", "unknown")
+        active_enter_us = int(fields.get("ActiveEnterTimestampMonotonic") or 0)
+        active_age = 0
+        if active_enter_us > 0:
+            try:
+                uptime = float(Path("/proc/uptime").read_text().split()[0])
+                active_age = max(0, int(uptime - active_enter_us / 1_000_000))
+            except (OSError, IndexError, ValueError):
+                active_age = 0
+        return {
+            "active_state": active_state,
+            "sub_state": sub_state,
+            "active_age": active_age,
+            "now": int(now),
+        }, None
+
+
     def sigkill_frigate():
-        subprocess.run(
-            [SYSTEMCTL_BIN, "kill", "--kill-who=main",
+        return subprocess.run(
+            [SYSTEMCTL_BIN, "kill", "--kill-who=all",
              "--signal=SIGKILL", "frigate.service"],
+            capture_output=True,
+            text=True,
             check=False,
         )
 
@@ -254,16 +339,47 @@ let
         state = load_state()
         verdict = status.get("verdict", "unknown")
         healthy = verdict == "healthy"
+        status_ts = int(status.get("ts", 0) or 0)
 
         if healthy:
             if state["consecutive_bad"] > 0:
                 print(f"healthy; resetting consecutive_bad "
                       f"({state['consecutive_bad']} -> 0)")
             state["consecutive_bad"] = 0
+            state["last_status_ts"] = status_ts
             save_state(state)
             return 0
 
+        service_state, service_err = get_frigate_service_state(now)
+        if service_err is not None:
+            print(f"{service_err}; not restarting", file=sys.stderr)
+            return 2
+        if (service_state["active_state"], service_state["sub_state"]) != ("active", "running"):
+            if state["consecutive_bad"] > 0:
+                print(f"frigate not active/running ({service_state}); "
+                      f"resetting consecutive_bad ({state['consecutive_bad']} -> 0)")
+            else:
+                print(f"frigate not active/running ({service_state}); not restarting")
+            state["consecutive_bad"] = 0
+            state["last_status_ts"] = status_ts
+            save_state(state)
+            return 0
+        if service_state["active_age"] < MIN_ACTIVE_BEFORE_RESTART_SECS:
+            if state["consecutive_bad"] > 0:
+                state["consecutive_bad"] = 0
+            print(f"frigate active for only {service_state['active_age']}s "
+                  f"(< {MIN_ACTIVE_BEFORE_RESTART_SECS}s); not restarting")
+            state["last_status_ts"] = status_ts
+            save_state(state)
+            return 0
+
+        if status_ts <= state["last_status_ts"]:
+            print(f"already processed status ts={status_ts}; not incrementing "
+                  f"consecutive_bad={state['consecutive_bad']}")
+            return 0
+
         state["consecutive_bad"] += 1
+        state["last_status_ts"] = status_ts
 
         if state["consecutive_bad"] < CONSECUTIVE_BAD_THRESHOLD:
             print(f"bad verdict={verdict} consecutive_bad="
@@ -296,7 +412,12 @@ let
         print(f"RESTART trigger={verdict} status={status}")
         with RESTART_LOG.open("a") as f:
             f.write(json.dumps(entry) + "\n")
-        sigkill_frigate()
+        kill = sigkill_frigate()
+        if kill.returncode != 0:
+            print(f"systemctl kill failed rc={kill.returncode}: "
+                  f"{kill.stderr.strip()}", file=sys.stderr)
+            save_state(state)
+            return 2
 
         state["consecutive_bad"] = 0
         state["last_restart_ts"] = int(now)
@@ -308,6 +429,50 @@ let
     if __name__ == "__main__":
         sys.exit(main())
   '';
+
+  status = pkgs.writeShellApplication {
+    name = "frigate-watchdog-status";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.systemd
+    ];
+    text = ''
+      set -eu
+
+      echo "== frigate.service =="
+      systemctl --no-pager --full status frigate.service || true
+
+      echo
+      echo "== watchdog timers =="
+      systemctl --no-pager --full status \
+        frigate-watchdog-probe.timer \
+        frigate-watchdog-act.timer || true
+
+      echo
+      echo "== latest status =="
+      if [ -f ${stateDir}/status.json ]; then
+        cat ${stateDir}/status.json
+      else
+        echo "no ${stateDir}/status.json yet"
+      fi
+
+      echo
+      echo "== actor state =="
+      if [ -f ${stateDir}/state.json ]; then
+        cat ${stateDir}/state.json
+      else
+        echo "no ${stateDir}/state.json yet"
+      fi
+
+      echo
+      echo "== restart log =="
+      if [ -f ${stateDir}/restarts.log ]; then
+        tail -n 20 ${stateDir}/restarts.log
+      else
+        echo "no ${stateDir}/restarts.log yet"
+      fi
+    '';
+  };
 in
 {
   # Let frigate's own grace+force-shutdown path run to completion (~30s
@@ -323,6 +488,8 @@ in
   systemd.tmpfiles.rules = [
     "d ${stateDir} 0755 root root -"
   ];
+
+  environment.systemPackages = [ status ];
 
   systemd.services.frigate-watchdog-probe = {
     description = "Frigate health probe (writes ${stateDir}/status.json)";
