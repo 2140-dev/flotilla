@@ -39,7 +39,8 @@ let
   windowSecs = 6 * 60 * 60;
   maxStatusAgeSecs = 180;
   minActiveBeforeRestartSecs = 3 * 60;
-  fulcrumPeer = "10.42.0.3:60001";
+  fulcrumPeerHost = "10.42.0.3";
+  fulcrumPeerPort = 60001;
 
   ssBin = "${pkgs.iproute2}/bin/ss";
   journalctlBin = "${pkgs.systemd}/bin/journalctl";
@@ -71,7 +72,8 @@ let
 
     PING_TIMEOUT_SECS = ${toString pingTimeoutSecs}
     CLOSE_WAIT_THRESHOLD = ${toString closeWaitThreshold}
-    FULCRUM_PEER = "${fulcrumPeer}"
+    FULCRUM_PEER_HOST = "${fulcrumPeerHost}"
+    FULCRUM_PEER_PORT = ${toString fulcrumPeerPort}
 
     SS_BIN = "${ssBin}"
     JOURNALCTL_BIN = "${journalctlBin}"
@@ -154,7 +156,34 @@ let
             ).stdout
         except (subprocess.TimeoutExpired, OSError):
             return -1
-        return sum(1 for line in out.splitlines() if FULCRUM_PEER in line)
+
+        def parse_peer(peer):
+            if peer.startswith("["):
+                host, sep, port = peer.rpartition("]:")
+                if sep:
+                    host = host[1:]
+                else:
+                    return None, None
+            else:
+                host, sep, port = peer.rpartition(":")
+                if not sep:
+                    return None, None
+            if host.startswith("::ffff:"):
+                host = host[len("::ffff:"):]
+            try:
+                return host, int(port)
+            except ValueError:
+                return None, None
+
+        close_wait = 0
+        for line in out.splitlines():
+            fields = line.split()
+            if len(fields) < 4:
+                continue
+            host, port = parse_peer(fields[3])
+            if host == FULCRUM_PEER_HOST and port == FULCRUM_PEER_PORT:
+                close_wait += 1
+        return close_wait
 
 
     def probe_indexer_silence_min():
