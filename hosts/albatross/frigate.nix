@@ -71,10 +71,10 @@
     # Cap new public Electrum SSL connections per source so one crawler
     # cannot multiply Frigate's per-connection silent-payment limits.
     iptables -w -I nixos-fw 1 -p tcp --syn --dport 50002 \
-      -m connlimit --connlimit-above 10 --connlimit-mask 32 \
+      -m connlimit --connlimit-above 6 --connlimit-mask 32 \
       --connlimit-saddr -j DROP
     ip6tables -w -I nixos-fw 1 -p tcp --syn --dport 50002 \
-      -m connlimit --connlimit-above 10 --connlimit-mask 128 \
+      -m connlimit --connlimit-above 6 --connlimit-mask 128 \
       --connlimit-saddr -j DROP
   '';
 }
