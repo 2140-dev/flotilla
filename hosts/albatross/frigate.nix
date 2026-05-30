@@ -51,10 +51,16 @@
   # extension silently falls back to CPU.
   systemd.services.frigate.environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
 
-  # Use frigate's native default batch (300k) rather than the roost
-  # preset's more conservative 200k. albatross's GPU has the compute
-  # width + memory for the bigger kernels; one round of measurement
-  # (200k @ 10c vs 500k @ 20c) didn't conclusively recommend a value,
-  # so default to what upstream picked until we run a controlled sweep.
-  services.frigate.settings.scan.batchSize = 300000;
+  services.frigate.settings.scan = {
+    # Use frigate's native default batch (300k) rather than the roost
+    # preset's more conservative 200k. albatross's GPU has the compute
+    # width + memory for the bigger kernels; one round of measurement
+    # (200k @ 10c vs 500k @ 20c) didn't conclusively recommend a value,
+    # so default to what upstream picked until we run a controlled sweep.
+    batchSize = 300000;
+
+    # First-cut guardrail against one public client queuing many expensive
+    # silent-payment history scans on the shared DuckDB/GPU path.
+    maxSubscriptions = 10;
+  };
 }
