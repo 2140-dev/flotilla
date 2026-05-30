@@ -34,9 +34,9 @@ let
   pingTimeoutSecs = 10;
   closeWaitThreshold = 25;
   consecutiveBadThreshold = 2;
-  cooldownSecs = 30 * 60;
-  maxRestartsInWindow = 3;
-  windowSecs = 6 * 60 * 60;
+  cooldownSecs = 10 * 60;
+  maxRestartsInWindow = 24;
+  windowSecs = 24 * 60 * 60;
   maxStatusAgeSecs = 180;
   minActiveBeforeRestartSecs = 3 * 60;
   fulcrumPeerHost = "10.42.0.3";
