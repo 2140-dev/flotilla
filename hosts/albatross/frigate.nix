@@ -58,9 +58,23 @@
     # (200k @ 10c vs 500k @ 20c) didn't conclusively recommend a value,
     # so default to what upstream picked until we run a controlled sweep.
     batchSize = 300000;
+    computeBackend = "GPU";
+    dbThreads = 8;
+    memoryLimit = "64GB";
 
     # First-cut guardrail against one public client queuing many expensive
     # silent-payment history scans on the shared DuckDB/GPU path.
     maxSubscriptions = 10;
   };
+
+  networking.firewall.extraCommands = ''
+    # Cap new public Electrum SSL connections per source so one crawler
+    # cannot multiply Frigate's per-connection silent-payment limits.
+    iptables -w -I nixos-fw 1 -p tcp --syn --dport 50002 \
+      -m connlimit --connlimit-above 10 --connlimit-mask 32 \
+      --connlimit-saddr -j DROP
+    ip6tables -w -I nixos-fw 1 -p tcp --syn --dport 50002 \
+      -m connlimit --connlimit-above 10 --connlimit-mask 128 \
+      --connlimit-saddr -j DROP
+  '';
 }
