@@ -67,6 +67,14 @@
     maxSubscriptions = 10;
   };
 
+  # frigate 1.6 enforces its own connection gate. Match the firewall's
+  # per-source cap below so both layers agree; the firewall stays as the
+  # cheaper first line, dropping SYNs before they reach the JVM. Other
+  # [limits] use upstream defaults (global 1000 sessions, silent payments
+  # subscribe pacing of 10 burst then one per 10s); loopback stays exempt,
+  # which the watchdog probe relies on.
+  services.frigate.settings.limits.maxConnectionsPerIp = 6;
+
   networking.firewall.extraCommands = ''
     # Cap new public Electrum SSL connections per source so one crawler
     # cannot multiply Frigate's per-connection silent-payment limits.

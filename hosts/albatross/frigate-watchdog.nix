@@ -24,7 +24,12 @@
 #
 # Watchdog SIGKILLs directly because by the time the act phase fires, we
 # know frigate is wedged — there's nothing to gain from a SIGTERM-then-wait.
-# Restart=on-failure on frigate.service brings it back up after ~10s.
+# Just before the kill it SIGQUITs the JVM so a thread dump of the wedged
+# state lands in the journal. Restart=on-failure on frigate.service brings
+# it back up after ~10s.
+#
+# Kept as a safety net on frigate 1.6 (master), whose backend supervisor
+# should fix the CLOSE-WAIT leak; revisit removal once 1.6 has run cleanly.
 
 let
   stateDir = "/var/lib/frigate-watchdog";
@@ -39,6 +44,7 @@ let
   windowSecs = 24 * 60 * 60;
   maxStatusAgeSecs = 180;
   minActiveBeforeRestartSecs = 3 * 60;
+  threadDumpWaitSecs = 3;
   fulcrumPeerHost = "10.42.0.3";
   fulcrumPeerPort = 60001;
 
@@ -253,6 +259,8 @@ let
     ceiling.
     """
     import json
+    import os
+    import signal
     import subprocess
     import sys
     import time
@@ -261,6 +269,8 @@ let
     STATE_DIR = Path("${stateDir}")
     STATUS_FILE = STATE_DIR / "status.json"
     STATE_FILE = STATE_DIR / "state.json"
+    CGROUP_PROCS = "/sys/fs/cgroup/system.slice/frigate.service/cgroup.procs"
+    THREAD_DUMP_WAIT_SECS = ${toString threadDumpWaitSecs}
     RESTART_LOG = STATE_DIR / "restarts.log"
 
     CONSECUTIVE_BAD_THRESHOLD = ${toString consecutiveBadThreshold}
@@ -334,6 +344,29 @@ let
             "active_age": active_age,
             "now": int(now),
         }, None
+
+
+    def dump_frigate_threads():
+        """SIGQUIT frigate's JVM so it writes a thread dump to the journal,
+        making the wedge diagnosable after the SIGKILL. Only the java child
+        is signalled: the launcher is a shell script, which SIGQUIT would
+        terminate. Best effort; never blocks the restart.
+        """
+        try:
+            pids = Path(CGROUP_PROCS).read_text().split()
+        except OSError as e:
+            print(f"thread dump skipped: {e}", file=sys.stderr)
+            return
+        for pid in pids:
+            try:
+                if Path(f"/proc/{pid}/comm").read_text().strip() == "java":
+                    os.kill(int(pid), signal.SIGQUIT)
+                    print(f"sent SIGQUIT to frigate jvm pid={pid} for thread dump")
+                    time.sleep(THREAD_DUMP_WAIT_SECS)
+                    return
+            except (OSError, ValueError):
+                continue
+        print("thread dump skipped: no java process in frigate cgroup", file=sys.stderr)
 
 
     def sigkill_frigate():
@@ -441,6 +474,7 @@ let
         print(f"RESTART trigger={verdict} status={status}")
         with RESTART_LOG.open("a") as f:
             f.write(json.dumps(entry) + "\n")
+        dump_frigate_threads()
         kill = sigkill_frigate()
         if kill.returncode != 0:
             print(f"systemctl kill failed rc={kill.returncode}: "
