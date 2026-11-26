@@ -11,10 +11,13 @@
     ./hardware-configuration.nix
     ./gpu.nix
     ./frigate.nix
+    ../../modules/frigate-watchdog.nix
     ./wireguard.nix
   ];
 
   networking.hostName = "kingfisher";
+
+  flotilla.frigate-watchdog.fulcrumPeer.host = "127.0.0.1";
 
   # Secondary operator key (josie's other workstation).
   users.users.josie.openssh.authorizedKeys.keys = [

@@ -7,16 +7,20 @@ for the bare-metal Hetzner machines that run it.
 
 ## Hosts
 
-- **kingfisher** — production silent-payments server. Runs
-  bitcoind, electrs, and Frigate; publishes
-  `frigate.2140.dev:50002` over TLS.
-- **finney** — secondary host for ZFS replication and ad-hoc
-  storage. No public services.
+- **kingfisher** — production silent-payments server (all-in-one).
+  Runs bitcoind, Fulcrum and Frigate (GPU scanning on an RTX 4000
+  SFF Ada); publishes `frigate.2140.dev:50002` over TLS.
+- **albatross** — frigate-edge serving `frigate.2140.dev` until the
+  cutover to kingfisher; backends on finney over the WireGuard mesh.
+  Retiring after cutover.
+- **finney** — bitcoind + Fulcrum backend for albatross, reachable only
+  on the mesh. Leaving the fleet after cutover.
 
 ## Layout
 
 ```
 modules/common.nix     operator-wide settings (state version, ZFS, openssh, gc, josie's user)
+modules/frigate-watchdog.nix  restart-on-wedge safety net for frigate (imported per host)
 hosts/<name>/          per-host config: disko layout, hardware, host-specific services
 secrets/secrets.nix    agenix recipient registry
 flake.nix              consumes roost, defines nixosConfigurations
