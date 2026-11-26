@@ -38,29 +38,43 @@
 
     memoryLimit = "20GB";
 
-    # First-cut guardrail against one public client queuing many expensive
-    # silent-payment history scans on the shared DuckDB/GPU path.
-    maxSubscriptions = 10;
+    # Silent payments subscriptions per connection. Each one starts a scan
+    # on the shared GPU.
+    maxSubscriptions = 5;
   };
 
-  # frigate 1.6 enforces its own connection gate. Match the firewall's
-  # per-source cap below so both layers agree; the firewall stays as the
-  # cheaper first line, dropping SYNs before they reach the JVM. Other
-  # [limits] use upstream defaults (global 1000 sessions, silent payments
-  # subscribe pacing of 10 burst then one per 10s); loopback stays exempt,
-  # which the watchdog probe relies on.
-  services.frigate.settings.limits.maxConnectionsPerIp = 6;
+  # maxConnectionsPerIp matches the firewall's per-source cap below.
+  # Loopback stays exempt, which the watchdog probe relies on.
+  services.frigate.settings.limits = {
+    maxConnections = 500;
+    maxConnectionsPerIp = 6;
+    silentPaymentsSubscribeBurst = 3;
+    silentPaymentsSubscribeIntervalSeconds = 30;
+  };
 
+  # Per source (IPv4 address, IPv6 /64, matching frigate): at most 6
+  # concurrent and 20 new connections a minute to the public port. The rate
+  # cap stops clients reconnecting to reset frigate's per-session pacing.
   networking.firewall.extraCommands = ''
-    # Cap new public Electrum SSL connections per source so one crawler
-    # cannot multiply Frigate's per-connection silent-payment limits.
     iptables -w -I nixos-fw 1 -p tcp --syn --dport 50002 \
       -m connlimit --connlimit-above 6 --connlimit-mask 32 \
       --connlimit-saddr -j DROP
+    iptables -w -I nixos-fw 1 -p tcp --syn --dport 50002 \
+      -m hashlimit --hashlimit-name frigate-v4 --hashlimit-mode srcip \
+      --hashlimit-srcmask 32 --hashlimit-above 20/minute --hashlimit-burst 20 \
+      -j DROP
     ip6tables -w -I nixos-fw 1 -p tcp --syn --dport 50002 \
-      -m connlimit --connlimit-above 6 --connlimit-mask 128 \
+      -m connlimit --connlimit-above 6 --connlimit-mask 64 \
       --connlimit-saddr -j DROP
+    ip6tables -w -I nixos-fw 1 -p tcp --syn --dport 50002 \
+      -m hashlimit --hashlimit-name frigate-v6 --hashlimit-mode srcip \
+      --hashlimit-srcmask 64 --hashlimit-above 20/minute --hashlimit-burst 20 \
+      -j DROP
   '';
+
+  # Under memory pressure the kernel kills frigate, not bitcoind or fulcrum;
+  # the watchdog and Restart= bring it back.
+  systemd.services.frigate.serviceConfig.MemoryMax = "28G";
 
   # Leave room for bitcoind, fulcrum and frigate in 62 GiB.
   boot.kernelParams = [ "zfs.zfs_arc_max=${toString (16 * 1024 * 1024 * 1024)}" ];
