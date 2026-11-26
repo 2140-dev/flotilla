@@ -34,9 +34,7 @@
 
   # `user:password` consumed by frigate via systemd LoadCredential. The
   # matching `rpcauth=user:salt$hash` line lives on finney (the active
-  # backend) in hosts/finney/backend.nix; the same HMAC is also present
-  # on kingfisher under exposeBackends.rpcAuth.passwordHMAC so this
-  # credential file works against either backend without re-encryption.
+  # backend) in hosts/finney/backend.nix.
   # Mode 0440 + owner `frigate` so the frigate user (declared by the
   # bare frigate module) can read it for LoadCredential to pick up.
   age.secrets.bitcoind-rpc-creds = {

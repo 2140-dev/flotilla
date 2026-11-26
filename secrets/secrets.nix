@@ -22,10 +22,7 @@ in
 {
   # `user:password` for the bitcoind RPC user that frigate-edge on
   # albatross uses to authenticate to its backend's bitcoind. The
-  # matching rpcauth HMAC is committed in hosts/finney/backend.nix
-  # (the active backend post-cutover) and hosts/kingfisher/frigate.nix
-  # (the original backend) — same HMAC in both, so this single
-  # credential authenticates against either.
+  # matching rpcauth HMAC is committed in hosts/finney/backend.nix.
   "bitcoind-rpc-creds.age".publicKeys = [
     josie
     albatross

@@ -45,8 +45,8 @@ let
   maxStatusAgeSecs = 180;
   minActiveBeforeRestartSecs = 3 * 60;
   threadDumpWaitSecs = 3;
-  fulcrumPeerHost = "10.42.0.3";
-  fulcrumPeerPort = 60001;
+  fulcrumPeerHost = config.flotilla.frigate-watchdog.fulcrumPeer.host;
+  fulcrumPeerPort = config.flotilla.frigate-watchdog.fulcrumPeer.port;
 
   ssBin = "${pkgs.iproute2}/bin/ss";
   journalctlBin = "${pkgs.systemd}/bin/journalctl";
@@ -538,82 +538,96 @@ let
   };
 in
 {
-  # Let frigate's own grace+force-shutdown path run to completion (~30s
-  # worst case observed during a wedged stop). 45s gives that headroom
-  # plus a real backstop if frigate's self-shutdown is itself ever wedged.
-  # The watchdog SIGKILLs directly when it detects the wedge state, so
-  # this timeout doesn't gate watchdog recovery — only operator-initiated
-  # restarts and nixos-rebuild deploys.
-  systemd.services.frigate.serviceConfig.TimeoutStopSec = "45s";
-
-  # State dir: status.json + state.json + restarts.log live here. Readable
-  # by anyone (status is benign), writable by root (which both timers run as).
-  systemd.tmpfiles.rules = [
-    "d ${stateDir} 0755 root root -"
-  ];
-
-  environment.systemPackages = [ status ];
-
-  systemd.services.frigate-watchdog-probe = {
-    description = "Frigate health probe (writes ${stateDir}/status.json)";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${probe}/bin/frigate-watchdog-probe";
-      # root: needs to read systemd journal and run ss without group plumbing.
-      User = "root";
-      # The probe returns exit 1 to signal "unhealthy" (useful for journal grep
-      # and act-script chaining), but we don't want systemd to mark the unit
-      # failed every time — that masks real unit failures (Python crash, etc.)
-      # and trips nixos-rebuild's activation script. Treat 0 and 1 as success.
-      SuccessExitStatus = "0 1";
-      # Light hardening — probe touches network (localhost), journal, and ss.
-      NoNewPrivileges = true;
-      ProtectSystem = "strict";
-      ProtectHome = true;
-      ReadWritePaths = [ stateDir ];
-      PrivateTmp = true;
+  options.flotilla.frigate-watchdog.fulcrumPeer = {
+    host = lib.mkOption {
+      type = lib.types.str;
+      description = "Address of the Electrum backend (fulcrum) frigate connects to.";
+    };
+    port = lib.mkOption {
+      type = lib.types.port;
+      default = 60001;
+      description = "Port of the Electrum backend (fulcrum) frigate connects to.";
     };
   };
 
-  systemd.timers.frigate-watchdog-probe = {
-    description = "Run frigate health probe every 60s";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      # OnActiveSec (relative to timer activation) — first fire 60s after the
-      # timer comes up. On deploy that gives frigate's restart time to settle;
-      # on boot it gives the rest of the system the same headroom. Using
-      # OnBootSec would have meant "fire 60s after boot time" which is already
-      # in the past for a long-running box and would fire immediately on a
-      # deploy that adds the timer.
-      OnActiveSec = "60s";
-      OnUnitActiveSec = "60s";
-      AccuracySec = "1s";
-    };
-  };
+  config = {
+    # Let frigate's own grace+force-shutdown path run to completion (~30s
+    # worst case observed during a wedged stop). 45s gives that headroom
+    # plus a real backstop if frigate's self-shutdown is itself ever wedged.
+    # The watchdog SIGKILLs directly when it detects the wedge state, so
+    # this timeout doesn't gate watchdog recovery — only operator-initiated
+    # restarts and nixos-rebuild deploys.
+    systemd.services.frigate.serviceConfig.TimeoutStopSec = "45s";
 
-  systemd.services.frigate-watchdog-act = {
-    description = "Frigate watchdog actor (SIGKILLs wedged frigate)";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${act}/bin/frigate-watchdog-act";
-      User = "root"; # systemctl kill needs root or polkit
-      NoNewPrivileges = true;
-      ProtectSystem = "strict";
-      ProtectHome = true;
-      ReadWritePaths = [ stateDir ];
-      PrivateTmp = true;
-    };
-  };
+    # State dir: status.json + state.json + restarts.log live here. Readable
+    # by anyone (status is benign), writable by root (which both timers run as).
+    systemd.tmpfiles.rules = [
+      "d ${stateDir} 0755 root root -"
+    ];
 
-  systemd.timers.frigate-watchdog-act = {
-    description = "Run frigate watchdog act every 60s, offset 30s from probe";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      # First fire 90s after the timer comes up — 30s after the first probe
-      # has written status.json. Subsequent runs every 60s.
-      OnActiveSec = "90s";
-      OnUnitActiveSec = "60s";
-      AccuracySec = "1s";
+    environment.systemPackages = [ status ];
+
+    systemd.services.frigate-watchdog-probe = {
+      description = "Frigate health probe (writes ${stateDir}/status.json)";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${probe}/bin/frigate-watchdog-probe";
+        # root: needs to read systemd journal and run ss without group plumbing.
+        User = "root";
+        # The probe returns exit 1 to signal "unhealthy" (useful for journal grep
+        # and act-script chaining), but we don't want systemd to mark the unit
+        # failed every time — that masks real unit failures (Python crash, etc.)
+        # and trips nixos-rebuild's activation script. Treat 0 and 1 as success.
+        SuccessExitStatus = "0 1";
+        # Light hardening — probe touches network (localhost), journal, and ss.
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        ReadWritePaths = [ stateDir ];
+        PrivateTmp = true;
+      };
+    };
+
+    systemd.timers.frigate-watchdog-probe = {
+      description = "Run frigate health probe every 60s";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        # OnActiveSec (relative to timer activation) — first fire 60s after the
+        # timer comes up. On deploy that gives frigate's restart time to settle;
+        # on boot it gives the rest of the system the same headroom. Using
+        # OnBootSec would have meant "fire 60s after boot time" which is already
+        # in the past for a long-running box and would fire immediately on a
+        # deploy that adds the timer.
+        OnActiveSec = "60s";
+        OnUnitActiveSec = "60s";
+        AccuracySec = "1s";
+      };
+    };
+
+    systemd.services.frigate-watchdog-act = {
+      description = "Frigate watchdog actor (SIGKILLs wedged frigate)";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${act}/bin/frigate-watchdog-act";
+        User = "root"; # systemctl kill needs root or polkit
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        ReadWritePaths = [ stateDir ];
+        PrivateTmp = true;
+      };
+    };
+
+    systemd.timers.frigate-watchdog-act = {
+      description = "Run frigate watchdog act every 60s, offset 30s from probe";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        # First fire 90s after the timer comes up — 30s after the first probe
+        # has written status.json. Subsequent runs every 60s.
+        OnActiveSec = "90s";
+        OnUnitActiveSec = "60s";
+        AccuracySec = "1s";
+      };
     };
   };
 }

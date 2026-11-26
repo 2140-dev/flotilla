@@ -3,7 +3,7 @@
     disk = {
       nvme0 = {
         type = "disk";
-        device = "/dev/nvme0n1";
+        device = "/dev/disk/by-id/nvme-SAMSUNG_MZQLB1T9HAJR-00007_S439NA0NB00185";
         content = {
           type = "gpt";
           partitions = {
@@ -37,7 +37,7 @@
 
       nvme1 = {
         type = "disk";
-        device = "/dev/nvme1n1";
+        device = "/dev/disk/by-id/nvme-SAMSUNG_MZQLB1T9HAJR-00007_S439NE0M202430";
         content = {
           type = "gpt";
           # No ESP on nvme1 — single ESP on nvme0 (matching finney's pattern).
