@@ -48,7 +48,7 @@
   services.frigate.settings.limits = {
     maxConnections = 500;
     maxConnectionsPerIp = 6;
-    silentPaymentsSubscribeBurst = 3;
+    silentPaymentsSubscribeBurst = 5;
     silentPaymentsSubscribeIntervalSeconds = 30;
   };
 
